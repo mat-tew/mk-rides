@@ -1,0 +1,6 @@
+Initial commit: MK RIDES — Kenya's modern ride-hailing platform
+
+React + Vite + TypeScript + Tailwind CSS frontend with Supabase backend
+(auth, Postgres, realtime, edge functions). Rider, driver and admin
+flows, fare estimation on OpenStreetMap/Leaflet, and M-Pesa-ready
+payments. Secrets excluded via .gitignore; configure .env.example.
