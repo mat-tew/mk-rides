@@ -1,0 +1,146 @@
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MK RIDES — one-shot GitHub publication script
+# Publishes the existing project to github.com/mat-tew/mk-rides WITHOUT
+# exposing secrets. The project code is used as-is: no rebuilds, no Docker.
+#
+# Usage:
+#   ./publish-to-github.sh preflight /path/to/mk-rides   # checks only (safe)
+#   ./publish-to-github.sh publish  /path/to/mk-rides    # commit + push via gh
+# ─────────────────────────────────────────────────────────────────────────────
+set -euo pipefail
+
+REPO="mat-tew/mk-rides"
+VISIBILITY="private"   # flip to "public" when you are ready to open it up
+MODE="${1:-preflight}"
+DIR="${2:-.}"
+
+c_red()  { printf '\033[31m%s\033[0m\n' "$1"; }
+c_grn()  { printf '\033[32m%s\033[0m\n' "$1"; }
+c_ylw()  { printf '\033[33m%s\033[0m\n' "$1"; }
+step()   { printf '\n\033[1m== %s ==\033[0m\n' "$1"; }
+
+[ -d "$DIR" ] || { c_red "Directory not found: $DIR"; exit 1; }
+cd "$DIR"
+
+# ── Step 0: sanity — looks like the MK RIDES project ─────────────────────────
+step "0/6 Sanity checks"
+for f in package.json index.html src; do
+  if [ ! -e "$f" ]; then
+    c_ylw "⚠  '$f' not found — are you at the root of the MK RIDES project?"
+  else
+    c_grn "✓  $f present"
+  fi
+done
+
+# ── Step 1: .gitignore must exist and must ignore .env ────────────────────────
+step "1/6 .gitignore guard"
+if [ ! -f .gitignore ]; then
+  c_red "✗  .gitignore missing — copy the provided .gitignore in first."
+  exit 1
+fi
+grep -qE '^\.env$' .gitignore || { c_red "✗  .gitignore does not ignore '.env'"; exit 1; }
+grep -qE '^node_modules' .gitignore || c_ylw "⚠  node_modules/ not in .gitignore"
+grep -qE '^dist' .gitignore || c_ylw "⚠  dist/ not in .gitignore"
+c_grn "✓  .gitignore covers .env (+ node_modules, dist)"
+[ -f .env.example ] && c_grn "✓  .env.example present (this SHOULD be committed)"
+
+# ── Step 2: secret scan of the files that WOULD be committed ─────────────────
+step "2/6 Secret scan (working tree, excluding ignored paths)"
+PATTERNS='service_role|sbp_[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|MPESA_PASSKEY=.+|MPESA_CONSUMER_SECRET=.+|sk_live_|pk_live_'
+# Scan only files git would actually commit: tracked-or-untracked, not ignored.
+CANDIDATES="$(git ls-files -c -o --exclude-standard 2>/dev/null || find . -type f \
+  -not -path './node_modules/*' -not -path './dist/*' -not -path './.git/*')"
+HITS=0
+if [ -n "$CANDIDATES" ]; then
+  while IFS= read -r file; do
+    # skip the env template itself (contains only placeholders)
+    case "$file" in *.env.example|*COMMIT_MESSAGE.txt) continue;; esac
+    if grep -qIE "$PATTERNS" "$file" 2>/dev/null; then
+      c_red "✗  possible secret in: $file"
+      grep -nIE "$PATTERNS" "$file" | head -3 | sed 's/^/     /'
+      HITS=$((HITS+1))
+    fi
+  done <<< "$CANDIDATES"
+fi
+# A JWT-looking anon key hard-coded in source is also a smell (it must come from env):
+JWTS=$(echo "$CANDIDATES" | grep -E '\.(ts|tsx|js|jsx)$' || true)
+if [ -n "$JWTS" ]; then
+  while IFS= read -r file; do
+    case "$file" in *.env.example) continue;; esac
+    if grep -qE 'eyJhbGciOi[A-Za-z0-9_-]{10,}' "$file" 2>/dev/null; then
+      c_red "✗  hard-coded JWT (Supabase key?) found in: $file"
+      HITS=$((HITS+1))
+    fi
+  done <<< "$JWTS"
+fi
+if [ "$HITS" -gt 0 ]; then
+  c_red "Aborting: $HITS potential secret(s) must be moved to .env / Supabase secrets first."
+  exit 1
+fi
+c_grn "✓  no secrets detected in committable files"
+
+# ── Step 3: make sure a stray .env can never be staged ────────────────────────
+if [ -f .env ]; then
+  if git check-ignore -q .env 2>/dev/null || [ ! -d .git ]; then
+    c_grn "✓  local .env exists and is ignored (stays on your machine only)"
+  else
+    c_red "✗  .env is NOT ignored — fix .gitignore before continuing."
+    exit 1
+  fi
+fi
+
+if [ "$MODE" = "preflight" ]; then
+  echo
+  c_grn "PREFLIGHT PASSED — safe to publish."
+  echo "Next: $0 publish \"$DIR\""
+  exit 0
+fi
+[ "$MODE" = "publish" ] || { c_red "Unknown mode: $MODE (use preflight|publish)"; exit 1; }
+
+# ── Step 4: git init (idempotent) ─────────────────────────────────────────────
+step "3/6 (done above) — initialising repository"
+step "4/6 git init + stage"
+if [ ! -d .git ]; then
+  git init -b main
+  c_grn "✓  git init -b main"
+else
+  git symbolic-ref HEAD refs/heads/main 2>/dev/null || git branch -M main
+  c_grn "✓  existing repo, branch set to main"
+fi
+git add -A
+if git ls-files --error-unmatch .env >/dev/null 2>&1; then
+  c_red "✗  .env got staged — unstaging it NOW: git rm --cached .env"
+  git rm --cached -q .env
+  exit 1
+fi
+c_grn "✓  staged $(git diff --cached --name-only | wc -l | tr -d ' ') files (.env NOT among them)"
+
+# ── Step 5: initial commit (message from COMMIT_MESSAGE.txt) ─────────────────
+step "5/6 initial commit"
+if [ -f COMMIT_MESSAGE.txt ]; then
+  git commit -F COMMIT_MESSAGE.txt || c_ylw "nothing new to commit"
+else
+  git commit -m "Initial commit: MK RIDES — Kenya's modern ride-hailing platform" \
+            || c_ylw "nothing new to commit"
+fi
+git log --oneline -1
+
+# ── Step 6: create remote & push ─────────────────────────────────────────────
+step "6/6 create $REPO and push"
+command -v gh >/dev/null 2>&1 || { c_red "GitHub CLI (gh) not installed. Install: https://cli.github.com"; exit 1; }
+gh auth status >/dev/null 2>&1 || { c_red "Not authenticated. Run: gh auth login"; exit 1; }
+
+if ! git remote get-url origin >/dev/null 2>&1; then
+  gh repo create "$REPO" "--$VISIBILITY" \
+    --description "MK RIDES — Kenya's modern ride-hailing platform. React + Vite + Tailwind, Supabase backend, M-Pesa ready." \
+    --source . --remote origin
+  c_grn "✓  created github.com/$REPO ($VISIBILITY) and added remote 'origin'"
+else
+  c_ylw "origin already set to: $(git remote get-url origin)"
+fi
+git push -u origin main
+echo
+c_grn "DONE — https://github.com/$REPO"
+echo "Post-publish: Settings → Secrets are NOT needed for Vite apps; VITE_SUPABASE_URL /"
+echo "VITE_SUPABASE_ANON_KEY stay in your local .env and your hosting provider's env config."
