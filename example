@@ -1,0 +1,34 @@
+─
+# MK RIDES — environment template
+# Copy to .env (never commit .env) and fill in real values:
+#   cp .env.example .env
+# ──────────────────────────────────────────────────────────────────────
+
+# ── Client (Vite) ────────────────────────────────────────────────────
+# These are bundled into the frontend at build time. The anon key is
+# public-by-design and is safe for the browser ONLY because Supabase
+# Row Level Security is enabled on every table. Still: keep it in .env,
+# never hard-code it, never commit it.
+
+# Your Supabase project URL  →  https://<project-ref>.supabase.co
+# Dashboard → Project Settings → Data API → Project URL
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+
+# Your Supabase anon/public key (JWT starting with "eyJhbGciOi...")
+# Dashboard → Project Settings → API Keys → anon / public
+VITE_SUPABASE_ANON_KEY=your-anon-public-key-here
+
+# Public base URL of the deployed app (used for auth redirects)
+VITE_APP_URL=https://mk-rides-shsp.arcada.app
+
+# ── Server-side only (Supabase Edge Functions) ───────────────────────
+# ⚠ NEVER put these in .env for the Vite build, NEVER prefix with VITE_,
+# NEVER commit them. They live in Supabase → Edge Functions → Secrets:
+#   supabase secrets set KEY=value
+#
+# SUPABASE_SERVICE_ROLE_KEY=         # bypasses RLS — most sensitive key
+# MPESA_CONSUMER_KEY=                # Safaricom Daraja portal
+# MPESA_CONSUMER_SECRET=             # Safaricom Daraja portal
+# MPESA_PASSKEY=                     # Lipa Na M-Pesa Online passkey
+# MPESA_SHORTCODE=                   # e.g. 174379 (sandbox)
+# MPESA_CALLBACK_URL=                # https://<project-ref>.supabase.co/functions/v1/mpesa-callback
