@@ -1,0 +1,82 @@
+mk-rides/
+├── .env.example                 # env template — the ONLY env file that goes to GitHub
+├── .gitignore                   # excludes .env, node_modules, dist, supabase temps
+├── .gitattributes               # LF line endings, linguist hints (optional but recommended)
+├── README.md                    # project overview + setup instructions
+├── COMMIT_MESSAGE.txt           # (helper — delete after committing, or keep untracked)
+├── index.html                   # Vite entry (CSP, fonts, meta — verified in deployed build)
+├── package.json                 # scripts: dev / build / preview / lint
+├── package-lock.json            # lockfile — DO commit for reproducible installs
+├── vite.config.ts               # Vite + React + Tailwind v4 plugin config
+├── tsconfig.json                # TypeScript project references
+├── tsconfig.app.json            # app-side TS config
+├── tsconfig.node.json           # vite.config-side TS config
+├── eslint.config.js             # flat ESLint config (if present in project)
+├── public/
+│   ├── favicon.svg              # MK RIDES mark (served at /favicon.svg — verified)
+│   └── robots.txt               # crawler policy (served at /robots.txt — verified)
+├── src/
+│   ├── main.tsx                 # React root mount (#root) + router bootstrap
+│   ├── App.tsx                  # route table (verified from deployed bundle):
+│   │                            #   /  /home  /login  /signup  /onboarding
+│   │                            #   /driver  /driver/onboarding  /driver/earnings
+│   │                            #   /admin  /admin/login
+│   │                            #   /history  /notifications  /profile  /safety
+│   │                            #   /support  /help  /legal  /legal/:slug  *
+│   ├── index.css                # Tailwind v4 entry (@import "tailwindcss")
+│   ├── vite-env.d.ts            # /// <reference types="vite/client" />
+│   ├── lib/
+│   │   ├── supabase.ts          # createClient(VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
+│   │   ├── utils.ts             # cn(), formatters (KES fares, dates)
+│   │   └── constants.ts         # routes, vehicle classes, fare bands
+│   ├── hooks/
+│   │   ├── useAuth.ts           # session listener + profile fetch
+│   │   ├── useRide.ts           # active ride lifecycle
+│   │   └── useGeolocation.ts    # browser geolocation wrapper
+│   ├── components/
+│   │   ├── Map.tsx              # Leaflet + OpenStreetMap tiles
+│   │   ├── Navbar.tsx
+│   │   ├── RideCard.tsx
+│   │   ├── FareEstimate.tsx
+│   │   ├── DriverCard.tsx
+│   │   ├── PaymentSheet.tsx     # M-Pesa / card / cash picker
+│   │   ├── RatingModal.tsx
+│   │   └── ui/                  # buttons, inputs, sheets, badges (lucide icons)
+│   ├── context/
+│   │   └── AuthContext.tsx      # Supabase auth provider
+│   └── pages/
+│       ├── Landing.tsx          # /
+│       ├── Home.tsx             # /home — book a ride
+│       ├── Login.tsx            # /login
+│       ├── Signup.tsx           # /signup
+│       ├── Onboarding.tsx       # /onboarding
+│       ├── Profile.tsx          # /profile
+│       ├── History.tsx          # /history — past trips
+│       ├── Notifications.tsx    # /notifications
+│       ├── Safety.tsx           # /safety — SOS / trip sharing
+│       ├── Support.tsx          # /support
+│       ├── Help.tsx             # /help
+│       ├── Legal.tsx            # /legal + /legal/:slug
+│       ├── NotFound.tsx         # *
+│       ├── driver/
+│       │   ├── DriverDashboard.tsx   # /driver
+│       │   ├── DriverOnboarding.tsx  # /driver/onboarding (PSV verification)
+│       │   └── DriverEarnings.tsx    # /driver/earnings
+│       └── admin/
+│           ├── AdminLogin.tsx        # /admin/login
+│           └── AdminDashboard.tsx    # /admin
+└── supabase/
+    ├── config.toml              # local dev config (no secrets — safe to commit)
+    ├── migrations/              # SQL schema: users, drivers, rides, payments, …
+    │   └── 0001_init.sql
+    ├── seed.sql                 # optional seed data (no real PII)
+    └── functions/               # Edge Functions (Deno)
+        ├── mpesa-stk-push/      # initiates Lipa Na M-Pesa prompt
+        │   └── index.ts
+        └── mpesa-callback/      # Daraja callback → updates payment status
+            └── index.ts
+
+NOT committed (kept local / configured in dashboards):
+  .env                           # real VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
+  node_modules/  dist/           # build artifacts, regenerated anytime
+  service-role / Daraja keys     # Supabase Dashboard → Edge Functions → Secrets
